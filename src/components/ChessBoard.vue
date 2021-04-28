@@ -1,7 +1,7 @@
 <template>
   <div class="chessboard">
     <h1>Fog of war Chess!</h1>
-    <canvas id="board" width="800" height="800" class="board" 
+    <canvas id="board" width="600" height="600" class="board" 
       @mousemove="mouseMove"
       @mousedown="makeMove"></canvas>
     <p class="status">{{status}}</p>    
@@ -26,47 +26,83 @@ export default {
   data: function() {
   return {
       canvas: null,
+      side: 'w',
       x: 0,
       y: 0,
       selectedPiece: null,
-      status: null
+      status: null,
+      gameOver: false
     };
   },
   methods: {
     getPieceXY(x, y) {
-      var row = Math.floor(y / 100);
-      var col = Math.floor(x / 100);
+      var row = Math.floor(y / this.sqWidth);
+      var col = Math.floor(x / this.sqWidth);
 
       var algebraic = this.col_alg[col] + this.row_alg[row];
       return this.chess.get(algebraic);
     },
+    
     getPieceRowCol(row, col) {
       var algebraic = this.col_alg[col] + this.row_alg[row];
       return this.chess.get(algebraic);
     },
+
     makeBoard() {
       let ctx = this.canvas;
-      var sqWidth = 100;
       var row, col;
-      var whiteCol = "#e3c16f";
-      var blackCol = "#b88b4a";
-      var selectedCol = "#96ccff";
-      var legalMoveCol = "#b696ff";
+      var whiteCol = "#e8ebef";
+      var blackCol = "#7d8796";
+      var selectedCol = "#fff06e";
+      var legalMoveCol = "#0000ff";
       var alternate = true;
 
       // Draw squares
       for (row = 0; row < 8; row++) {
         for (col = 0; col < 8; col++) {
           ctx.fillStyle = (alternate ? whiteCol : blackCol);
-          ctx.fillRect(col * sqWidth, row * sqWidth, sqWidth, sqWidth);
+          ctx.fillRect(col * this.sqWidth, row * this.sqWidth, this.sqWidth, this.sqWidth);
           alternate = !alternate;
         }
         alternate = !alternate;
       }
 
-      if (this.selectedPiece) {
+      // Draw  selected square
+      ctx.strokeStyle = selectedCol;
+      ctx.lineWidth = 5;
+      var ro = Math.floor(this.y / this.sqWidth);
+      var co = Math.floor(this.x / this.sqWidth);
+      ctx.strokeRect(co * this.sqWidth + 2.5, ro * this.sqWidth + 2.5, this.sqWidth - 5, this.sqWidth - 5);
+
+      if (this.selectedPiece != null) {
         ctx.fillStyle = selectedCol;
-        ctx.fillRect(this.col * sqWidth, this.row * sqWidth, sqWidth, sqWidth);
+        ctx.fillRect(this.col * this.sqWidth, this.row * this.sqWidth, this.sqWidth, this.sqWidth);
+      }
+
+      // Draw pieces
+      for (row = 0; row < 8; row++) {
+        for (col = 0; col < 8; col++) {
+          var result = this.getPieceRowCol(row, col);
+          
+          if (result == null) {
+            continue;
+          }
+          var img = document.getElementById(result['type']+result['color']);
+
+          // Check if player is in check
+          if (this.chess.in_check()) {
+            if (result['type'] == 'k' && result['color'] == this.chess.turn()) {
+              ctx.fillStyle = "#ff0000";
+              ctx.fillRect(col * this.sqWidth, row * this.sqWidth, this.sqWidth, this.sqWidth);
+            }
+          }
+
+          ctx.drawImage(img, col * this.sqWidth, row * this.sqWidth, this.sqWidth, this.sqWidth);
+        }
+      }
+
+      // Draw legal moves
+      if (this.selectedPiece) {
         var i;
         for (i = 0; i < this.legalMoves.length; i++) {
           var move = this.legalMoves[i];
@@ -82,28 +118,15 @@ export default {
             r = this.row_alg.indexOf(move[1]);
           }
           
-          ctx.fillStyle = legalMoveCol;
+          ctx.strokeStyle = legalMoveCol;
           ctx.beginPath();
-          ctx.lineWidth = 10;
-          ctx.arc(c * sqWidth + sqWidth / 2, r * sqWidth + sqWidth / 2, 10, 0, 2 * Math.PI);
+          ctx.lineWidth = 5;
+          ctx.arc(c * this.sqWidth + this.sqWidth / 2, r * this.sqWidth + this.sqWidth / 2, 10, 0, 2 * Math.PI);
           ctx.stroke();
         }
       }
-
-      // Draw pieces
-      for (row = 0; row < 8; row++) {
-        for (col = 0; col < 8; col++) {
-          var result = this.getPieceRowCol(row, col);
-          
-          if (result == null) {
-            continue;
-          }
-          var img = document.getElementById(result['type']+result['color']);
-          ctx.drawImage(img, col * sqWidth, row * sqWidth, sqWidth, sqWidth);
-        }
-      }
-
     },
+
     movePiece() {
       var playedMove;
       var i;
@@ -139,16 +162,23 @@ export default {
         this.status = "DRAW!";
       }
 
+      this.gameOver = this.chess.game_over();
     },
+
     mouseMove(e) {
       this.x = e.offsetX;
       this.y = e.offsetY;
-
-      this.row = Math.floor(this.y / 100);
-      this.col = Math.floor(this.x / 100);
+      this.makeBoard();
     },
+    
     makeMove(e) {
       this.mouseMove(e);
+      this.row = Math.floor(this.y / this.sqWidth);
+      this.col = Math.floor(this.x / this.sqWidth);
+
+      if (this.gameOver) {
+        return;
+      }
 
       if (this.selectedPiece == null) {
         this.selectedPiece = this.getPieceXY(this.x, this.y);
@@ -163,11 +193,13 @@ export default {
       this.makeBoard();
     }
   },
+
   mounted: function mounted() {
     var c = document.getElementById("board");
     this.canvas = c.getContext('2d');
     const Chess = require('chess.js');
-    const chess = new Chess("8/6k1/6r1/3N4/1K6/8/2Q5/4R3 w - - 0 1");
+    // const chess = new Chess("8/6k1/6r1/3N4/1K6/8/2Q5/4R3 w - - 0 1");
+    const chess = new Chess();
     this.chess = chess;
     
     // Create converted
@@ -190,7 +222,8 @@ export default {
         this.pieceImages[col][pie] = img;
       }
     }
-    
+    this.width = 600;
+    this.sqWidth = Math.floor(this.width / 8);
     this.makeBoard();
   },
 }
@@ -204,6 +237,6 @@ export default {
 }
 .status {
   font-weight: bold;
-  font-size: 40px;
+  font-size: 20px;
 }
 </style>
