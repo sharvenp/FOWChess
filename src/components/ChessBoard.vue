@@ -51,17 +51,52 @@ export default {
     renderBoard() {
       let ctx = this.canvas;
       var row, col;
-      var whiteCol = "#e8ebef";
-      var blackCol = "#7d8796";
+      var whiteCol = "#767575";
+      var blackCol = "#535251";
+      var nonVisibleWhiteCol = "#464545";
+      var nonVisibleBlackCol = "#232221";
       var selectedCol = "#fff06e";
       var legalMoveCol = "#0000ff";
       var checkCol = "#ff0000";
       var alternate = true;
 
+      // Calculate visibility
+      this.visibility = [];
+      for (row = 0; row < 8; row++) {
+        var arr = [];
+        for (col = 0; col < 8; col++) {
+          arr.push(0);
+        }
+        this.visibility.push(arr);
+      }
+
+      for (row = 0; row < 8; row++) {
+        for (col = 0; col < 8; col++) {
+          
+          var piece = this.getPieceRowCol(row, col);
+          if (piece == null || piece['color'] != this.side) {
+            continue;
+          }
+          
+          // Get all adjacent squares for this (row, col)
+          var dr, dc;
+          for (dr = -1; dr < 2; dr++) {
+            for (dc = -1; dc < 2; dc++) {
+              if ((row + dr) >= 0 && (row + dr) <= 7) {
+                if ((col + dc) >= 0 && (col + dc) <= 7) {
+                  this.visibility[row + dr][col + dc] = 1; 
+                }
+              }
+            }
+          }
+        }
+      }
+
       // Draw squares
       for (row = 0; row < 8; row++) {
         for (col = 0; col < 8; col++) {
-          ctx.fillStyle = (alternate ? whiteCol : blackCol);
+          var isVisible = this.visibility[row][col] == 1;
+          ctx.fillStyle = (alternate ? (isVisible ? whiteCol : nonVisibleWhiteCol) : (isVisible ? blackCol : nonVisibleBlackCol));
           ctx.fillRect(col * this.sqWidth, row * this.sqWidth, this.sqWidth, this.sqWidth);
           alternate = !alternate;
         }
@@ -83,6 +118,11 @@ export default {
       // Draw pieces
       for (row = 0; row < 8; row++) {
         for (col = 0; col < 8; col++) {
+
+          if (this.visibility[row][col] == 0) {
+            continue;
+          }
+
           var result = this.getPieceRowCol(row, col);
           
           if (result == null) {
@@ -131,6 +171,7 @@ export default {
 
           } else {
 
+            // Castling
             var specR, specC;
             if (this.chess.turn() == 'w' && move == 'O-O') {
               specR = 7;
@@ -198,8 +239,9 @@ export default {
           }
         }
       }
-      
+
       this.chess.move(playedMove);
+      this.side = this.chess.turn();
       this.selectedPiece = null;
       this.renderBoard();
 
@@ -235,7 +277,14 @@ export default {
 
       if (this.selectedPiece == null) {
         // Select the piece
-        this.selectedPiece = this.getPieceXY(this.x, this.y);
+        var piece = this.getPieceXY(this.x, this.y);
+        if (piece == null) {
+          this.selectedPiece = null;
+        } else if (piece['color'] == this.side) {
+          this.selectedPiece = piece;
+        } else {
+          this.selectedPiece = null;
+        }
         if (this.selectedPiece) {
           this.legalMoves = this.chess.moves({ square: this.col_alg[this.col] + this.row_alg[this.row] })
         }
